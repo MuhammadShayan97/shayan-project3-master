@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -14,65 +14,52 @@ type Project = {
 export default function AdminDashboard() {
   const router = useRouter();
 
-  // Dashboard states
+  // Project states
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
-
-  // Message states
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  // Load projects from NeonDB through the API
-  const loadProjects = useCallback(async (): Promise<boolean> => {
+  // Change password states
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  // Load projects
+  const loadProjects = useCallback(async () => {
     try {
       const response = await fetch("/api/projects", {
-        method: "GET",
         cache: "no-store",
       });
 
-      const data = await response.json();
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || "Unable to load projects.");
+        throw new Error("Could not load projects.");
       }
 
-      if (!Array.isArray(data)) {
-        throw new Error("Invalid projects response.");
-      }
-
+      const data = await response.json();
       setProjects(data);
-      setError("");
-
-      return true;
-    } catch (err) {
-      console.error("Load projects error:", err);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while loading projects."
-      );
-
-      return false;
+    } catch {
+      setError("Unable to load projects. Check your database connection.");
     }
-  }, []);
+  }, [router]);
 
-  // Check authentication before loading dashboard data
+  // Check admin login
   useEffect(() => {
-    let cancelled = false;
-
     async function checkLogin() {
       try {
         const response = await fetch("/api/auth/session", {
-          method: "GET",
           cache: "no-store",
         });
 
@@ -81,35 +68,15 @@ export default function AdminDashboard() {
           return;
         }
 
-        const data = await response.json();
-
-        // Important: HTTP 200 alone does not mean authenticated.
-        if (data.authenticated !== true) {
-          router.replace("/login");
-          return;
-        }
-
-        if (!cancelled) {
-          await loadProjects();
-        }
-      } catch (err) {
-        console.error("Admin authentication check failed:", err);
-
-        if (!cancelled) {
-          router.replace("/login");
-        }
+        await loadProjects();
+      } catch {
+        router.replace("/login");
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     }
 
     checkLogin();
-
-    return () => {
-      cancelled = true;
-    };
   }, [router, loadProjects]);
 
   // Reset project form
@@ -119,17 +86,14 @@ export default function AdminDashboard() {
     setEditingId(null);
   }
 
-  // Add or update a project
+  // Add or update project
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setError("");
-    setSuccess("");
+    setMessage("");
 
-    const cleanTitle = title.trim();
-    const cleanDescription = description.trim();
-
-    if (!cleanTitle || !cleanDescription) {
+    if (!title.trim() || !description.trim()) {
       setError("Please enter both project title and description.");
       return;
     }
@@ -137,85 +101,70 @@ export default function AdminDashboard() {
     setSaving(true);
 
     try {
-      const isEditing = editingId !== null;
+      const url = editingId
+        ? `/api/projects/${editingId}`
+        : "/api/projects";
 
-      const response = await fetch(
-        isEditing ? `/api/projects/${editingId}` : "/api/projects",
-        {
-          method: isEditing ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: cleanTitle,
-            description: cleanDescription,
-          }),
-        }
-      );
+      const response = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim(),
+        }),
+      });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.replace("/login");
-          return;
-        }
-
-        throw new Error(
-          data.error || "Unable to save project."
-        );
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
       }
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to save project.");
+      }
+
+      setMessage(
+        editingId
+          ? "Project updated successfully!"
+          : "Project added successfully!"
+      );
 
       resetForm();
-
-      const refreshed = await loadProjects();
-
-      if (refreshed) {
-        setSuccess(
-          isEditing
-            ? "Project updated successfully!"
-            : "New project added successfully!"
-        );
-      }
+      await loadProjects();
     } catch (err) {
-      console.error("Save project error:", err);
-
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while saving the project."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setSaving(false);
     }
   }
 
-  // Start editing a project
-  function handleEdit(project: Project) {
+  // Edit project
+  function startEditing(project: Project) {
     setEditingId(project.id);
     setTitle(project.title);
     setDescription(project.description);
-
+    setMessage("");
     setError("");
-    setSuccess("");
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Delete a project
-  async function handleDelete(id: number) {
+  // Delete project
+  async function deleteProject(id: number) {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this project? This action cannot be undone."
+      "Are you sure you want to delete this project?"
     );
 
     if (!confirmed) return;
 
     setError("");
-    setSuccess("");
-    setDeletingId(id);
+    setMessage("");
 
     try {
       const response = await fetch(`/api/projects/${id}`, {
@@ -224,247 +173,341 @@ export default function AdminDashboard() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.replace("/login");
-          return;
-        }
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
 
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to delete project.");
+      }
+
+      setMessage("Project deleted successfully!");
+
+      if (editingId === id) {
+        resetForm();
+      }
+
+      await loadProjects();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    }
+  }
+
+  // Change admin password
+  async function handleChangePassword(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Please fill in all password fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        "New password and confirm password do not match."
+      );
+      return;
+    }
+
+    if (newPassword.length < 12 || newPassword.length > 128) {
+      setPasswordError(
+        "New password must be between 12 and 128 characters."
+      );
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError(
+        "Your new password must be different from your current password."
+      );
+      return;
+    }
+
+    setPasswordSaving(true);
+
+    try {
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
+
+      if (!response.ok) {
         throw new Error(
-          data.error || "Unable to delete project."
+          data.message || "Unable to change password."
         );
       }
 
-      const refreshed = await loadProjects();
-
-      if (refreshed) {
-        setSuccess("Project deleted successfully!");
-      }
-    } catch (err) {
-      console.error("Delete project error:", err);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong while deleting the project."
+      setPasswordMessage(
+        data.message || "Password changed successfully."
       );
-    } finally {
-      setDeletingId(null);
-    }
-  }
 
-  // Refresh dashboard projects
-  async function handleRefresh() {
-    setError("");
-    setSuccess("");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
 
-    const refreshed = await loadProjects();
-
-    if (refreshed) {
-      setSuccess("Projects refreshed successfully.");
-    }
-  }
-
-  // Admin logout
-  async function handleLogout() {
-    setLoggingOut(true);
-    setError("");
-
-    try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to log out. Please try again.");
-      }
+      window.alert(
+        "Password changed successfully! Please log in with your new password."
+      );
 
       router.replace("/login");
       router.refresh();
     } catch (err) {
-      console.error("Logout error:", err);
-
-      setError(
+      setPasswordError(
         err instanceof Error
           ? err.message
-          : "Logout failed. Please try again."
+          : "Something went wrong. Please try again."
       );
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
 
-      setLoggingOut(false);
+  // Logout
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+    } finally {
+      router.replace("/login");
+      router.refresh();
     }
   }
 
   // Loading screen
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#070b16] px-5 text-white">
-        <div className="text-center">
-          <div className="mx-auto mb-5 h-12 w-12 animate-spin rounded-full border-4 border-blue-500/20 border-t-cyan-400" />
-
-          <h2 className="text-xl font-semibold">
-            Loading Dashboard
-          </h2>
-
-          <p className="mt-2 text-sm text-slate-400">
-            Verifying your admin session...
-          </p>
-        </div>
+      <main className="flex min-h-screen items-center justify-center bg-[#050816] text-white">
+        <p className="animate-pulse text-cyan-300">
+          Loading admin dashboard...
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#070b16] text-white">
-      {/* Background decoration */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-blue-600/10 blur-[120px]" />
-        <div className="absolute -right-40 top-40 h-96 w-96 rounded-full bg-cyan-500/10 blur-[120px]" />
-      </div>
+    <main className="min-h-screen bg-[#050816] px-5 py-8 text-white sm:px-8">
+      <div className="mx-auto max-w-6xl">
 
-      <div className="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* HEADER */}
 
-        {/* Header */}
-        <header className="mb-8 flex flex-col justify-between gap-5 rounded-2xl border border-white/10 bg-[#101827]/80 p-5 shadow-xl backdrop-blur-xl sm:flex-row sm:items-center sm:p-6">
+        <header className="mb-10 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
           <div>
-            <div className="mb-2 flex items-center gap-2">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-300">
+              Muhammad Shayan
+            </p>
 
-              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                Admin Control Center
-              </span>
-            </div>
-
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Dashboard
-              <span className="text-cyan-400">.</span>
+            <h1 className="mt-2 text-3xl font-bold">
+              Admin Dashboard
             </h1>
 
             <p className="mt-2 text-sm text-slate-400">
-              Manage your portfolio projects and content.
+              Manage your portfolio projects.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               href="/"
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-300"
+              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-300 transition hover:border-cyan-400 hover:text-cyan-300"
             >
-              <span className="mr-2">↗</span>
-              View Website
+              View Website ↗
             </Link>
 
             <button
               type="button"
               onClick={handleLogout}
-              disabled={loggingOut}
-              className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
             >
-              {loggingOut ? "Logging out..." : "Logout"}
+              Logout
             </button>
           </div>
         </header>
 
-        {/* Dashboard statistics */}
+        {/* DASHBOARD STATISTICS */}
+
         <section className="mb-8 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-[#101827]/80 p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-400">
-                  Total Projects
-                </p>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+            <p className="text-sm text-slate-400">
+              Total Projects
+            </p>
 
-                <h2 className="mt-3 text-4xl font-bold text-white">
-                  {projects.length}
-                </h2>
-
-                <p className="mt-2 text-xs text-slate-500">
-                  Projects stored in your database
-                </p>
-              </div>
-
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-400/20 bg-blue-500/10 text-2xl">
-                📁
-              </div>
-            </div>
+            <p className="mt-3 text-4xl font-bold text-cyan-300">
+              {projects.length}
+            </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[#101827]/80 p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-400">
-                  Dashboard Status
-                </p>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+            <p className="text-sm text-slate-400">
+              Dashboard Status
+            </p>
 
-                <h2 className="mt-3 text-2xl font-bold text-emerald-400">
-                  Active
-                </h2>
-
-                <p className="mt-2 text-xs text-slate-500">
-                  Admin session verified
-                </p>
-              </div>
-
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 text-2xl">
-                ✓
-              </div>
-            </div>
+            <p className="mt-3 text-xl font-semibold text-emerald-400">
+              Admin Area
+            </p>
           </div>
         </section>
 
-        {/* Error message */}
-        {error && (
-          <div
-            role="alert"
-            className="mb-6 flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-300"
-          >
-            <span className="text-lg">⚠</span>
-            <p>{error}</p>
-          </div>
-        )}
+        {/* CHANGE ADMIN PASSWORD */}
 
-        {/* Success message */}
-        {success && (
-          <div
-            role="status"
-            className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-300"
-          >
-            <span className="text-lg">✓</span>
-            <p>{success}</p>
-          </div>
-        )}
+        <section className="mb-10 rounded-2xl border border-cyan-400/20 bg-white/[0.04] p-6 sm:p-8">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">
+              Account Security
+            </p>
 
-        {/* Add / Edit project form */}
-        <section className="mb-10 overflow-hidden rounded-2xl border border-white/10 bg-[#101827]/80 shadow-xl">
-          <div className="border-b border-white/10 px-5 py-5 sm:px-7">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                  Project Management
-                </p>
+            <h2 className="mt-2 text-2xl font-bold">
+              Change Admin Password
+            </h2>
 
-                <h2 className="text-xl font-bold">
-                  {editingId !== null
-                    ? "Edit Project"
-                    : "Add New Project"}
-                </h2>
-              </div>
-
-              {editingId !== null && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5"
-                >
-                  Cancel Editing
-                </button>
-              )}
-            </div>
+            <p className="mt-2 text-sm text-slate-400">
+              Update your admin login password securely.
+            </p>
           </div>
 
           <form
-            onSubmit={handleSubmit}
-            className="space-y-5 p-5 sm:p-7"
+            onSubmit={handleChangePassword}
+            className="max-w-xl space-y-5"
           >
+            <div>
+              <label
+                htmlFor="current-password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Current Password
+              </label>
+
+              <input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(event) =>
+                  setCurrentPassword(event.target.value)
+                }
+                autoComplete="current-password"
+                maxLength={128}
+                required
+                placeholder="Enter current password"
+                className="w-full rounded-xl border border-white/10 bg-[#080e20] px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="new-password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                New Password
+              </label>
+
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(event) =>
+                  setNewPassword(event.target.value)
+                }
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
+                required
+                placeholder="Minimum 12 characters"
+                className="w-full rounded-xl border border-white/10 bg-[#080e20] px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
+              />
+
+              <p className="mt-2 text-xs text-slate-500">
+                Use a unique password that you do not use on other websites.
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="confirm-password"
+                className="mb-2 block text-sm font-medium text-slate-300"
+              >
+                Confirm New Password
+              </label>
+
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) =>
+                  setConfirmPassword(event.target.value)
+                }
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
+                required
+                placeholder="Confirm your new password"
+                className="w-full rounded-xl border border-white/10 bg-[#080e20] px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
+              />
+            </div>
+
+            {passwordError && (
+              <p role="alert" className="text-sm text-red-300">
+                {passwordError}
+              </p>
+            )}
+
+            {passwordMessage && (
+              <p role="status" className="text-sm text-emerald-300">
+                {passwordMessage}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={passwordSaving}
+              className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+            >
+              {passwordSaving
+                ? "Updating Password..."
+                : "Update Password"}
+            </button>
+          </form>
+        </section>
+
+        {/* PROJECT MANAGER */}
+
+        <section className="mb-10 rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">
+              Project Manager
+            </p>
+
+            <h2 className="mt-2 text-2xl font-bold">
+              {editingId ? "Edit Project" : "Add New Project"}
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Add your work to the portfolio database.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label
                 htmlFor="project-title"
@@ -475,13 +518,12 @@ export default function AdminDashboard() {
 
               <input
                 id="project-title"
-                type="text"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. TruthLens AI"
                 maxLength={255}
                 required
-                className="w-full rounded-xl border border-white/10 bg-[#080f1d] px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
+                placeholder="e.g. TruthLens AI"
+                className="w-full rounded-xl border border-white/10 bg-[#080e20] px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
               />
             </div>
 
@@ -499,122 +541,126 @@ export default function AdminDashboard() {
                 onChange={(event) =>
                   setDescription(event.target.value)
                 }
-                placeholder="Describe what your project does..."
-                rows={5}
                 maxLength={10000}
                 required
-                className="w-full resize-y rounded-xl border border-white/10 bg-[#080f1d] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10"
+                rows={5}
+                placeholder="Describe what your project does..."
+                className="w-full resize-y rounded-xl border border-white/10 bg-[#080e20] px-4 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400"
               />
-
-              <p className="mt-2 text-right text-xs text-slate-500">
-                {description.length}/10000 characters
-              </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              {saving
-                ? "Please wait..."
-                : editingId !== null
-                  ? "✓ Update Project"
-                  : "+ Add Project"}
-            </button>
+            {error && (
+              <p role="alert" className="text-sm text-red-300">
+                {error}
+              </p>
+            )}
+
+            {message && (
+              <p role="status" className="text-sm text-emerald-300">
+                {message}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+              >
+                {saving
+                  ? "Saving..."
+                  : editingId
+                    ? "Update Project"
+                    : "Add Project"}
+              </button>
+
+              {editingId !== null && (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-xl border border-white/10 px-6 py-3 text-slate-300 transition hover:border-white/30"
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
           </form>
         </section>
 
-        {/* Projects section */}
-        <section className="rounded-2xl border border-white/10 bg-[#101827]/80 p-5 shadow-xl sm:p-7">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        {/* MANAGE PROJECTS */}
+
+        <section>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-400">
-                Your Portfolio
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-300">
+                Your Work
               </p>
 
-              <h2 className="text-xl font-bold">
+              <h2 className="mt-2 text-2xl font-bold">
                 Manage Projects
               </h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                Add, edit or remove projects from your portfolio.
-              </p>
             </div>
 
             <button
               type="button"
-              onClick={handleRefresh}
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-cyan-300"
+              onClick={loadProjects}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition hover:border-cyan-400 hover:text-cyan-300"
             >
               ↻ Refresh
             </button>
           </div>
 
           {projects.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/15 bg-[#080f1d]/70 px-5 py-14 text-center">
-              <div className="mb-4 text-4xl">📂</div>
+            <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-12 text-center">
+              <p className="text-3xl">🚀</p>
 
-              <h3 className="text-lg font-semibold text-white">
-                No Projects Found
+              <h3 className="mt-4 text-lg font-semibold">
+                No projects yet
               </h3>
 
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
-                Your project list is currently empty. Use the form
-                above to add your first portfolio project.
+              <p className="mt-2 text-sm text-slate-400">
+                Use the form above to add your first project.
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               {projects.map((project) => (
                 <article
                   key={project.id}
-                  className="group rounded-xl border border-white/10 bg-[#080f1d]/80 p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-400/30 hover:shadow-lg hover:shadow-cyan-500/5"
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition hover:border-cyan-400/40"
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 text-xl">
-                      ✦
-                    </div>
-
-                    <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                      Published
+                    <span className="rounded-lg bg-cyan-400/10 px-3 py-1 text-xs text-cyan-300">
+                      Project #{project.id}
                     </span>
+
+                    <span className="text-xl">💻</span>
                   </div>
 
-                  <h3 className="mb-3 text-lg font-bold text-white transition group-hover:text-cyan-300">
+                  <h3 className="text-xl font-bold">
                     {project.title}
                   </h3>
 
-                  <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-400">
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-400">
                     {project.description}
                   </p>
 
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-                    <span className="text-xs text-slate-500">
-                      Project ID: #{project.id}
-                    </span>
+                  <div className="mt-6 flex gap-3 border-t border-white/10 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(project)}
+                      className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm text-cyan-300 transition hover:bg-cyan-400/20"
+                    >
+                      Edit
+                    </button>
 
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(project)}
-                        disabled={saving || deletingId !== null}
-                        className="rounded-lg border border-blue-400/20 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Edit
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(project.id)}
-                        disabled={deletingId !== null || saving}
-                        className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deletingId === project.id
-                          ? "Deleting..."
-                          : "Delete"}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteProject(project.id)}
+                      className="rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-2 text-sm text-red-300 transition hover:bg-red-400/20"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </article>
               ))}
@@ -622,19 +668,12 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        {/* Footer */}
-        <footer className="py-8 text-center">
-          <p className="text-sm text-slate-500">
-            © {new Date().getFullYear()} Muhammad Shayan.
-            <span className="text-cyan-400">
-              {" "}Admin Dashboard
-            </span>
-          </p>
+        {/* FOOTER */}
 
-          <p className="mt-2 text-xs text-slate-600">
-            Manage your portfolio projects from one place.
-          </p>
+        <footer className="mt-16 border-t border-white/10 py-6 text-center text-xs text-slate-500">
+          © {new Date().getFullYear()} Muhammad Shayan · Admin Dashboard
         </footer>
+
       </div>
     </main>
   );

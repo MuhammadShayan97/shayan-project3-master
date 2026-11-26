@@ -654,7 +654,8 @@ function CursorChain() {
 
 export default function Portfolio() {
   const [menu, setMenu] = useState(false);
-  const [demoNotice, setDemoNotice] = useState(false);
+  const [contactStatus, setContactStatus] = useState("");
+  const [sending, setSending] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [tab, setTab] = useState<Tab>("script");
   const [out, setOut] = useState("");
@@ -813,11 +814,42 @@ export default function Portfolio() {
     return () => window.clearInterval(interval);
   }, [tab]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // This front-end demo does not send or store messages.
-    setDemoNotice(true);
+    setContactStatus("");
+    setSending(true);
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to send your message.");
+      }
+
+      setContactStatus("success");
+      setForm({
+        name: "",
+        email: "",
+        message: "",
+      });
+    } catch (error) {
+      setContactStatus(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
   const inputClass =
@@ -900,28 +932,17 @@ export default function Portfolio() {
 
         .shine {
           background-size: 200% auto;
-          animation: shine 6s linear infinite;
+          animation: shine 5s linear infinite;
         }
 
         @media (prefers-reduced-motion: reduce) {
-          html {
-            scroll-behavior: auto;
-          }
-
-          *, *::before, *::after {
+          *,
+          *::before,
+          *::after {
             animation-duration: .01ms !important;
             animation-iteration-count: 1 !important;
             transition-duration: .01ms !important;
             scroll-behavior: auto !important;
-          }
-
-          .orb, .marquee, .eq, .caret, .shine {
-            animation: none !important;
-          }
-
-          .reveal {
-            opacity: 1 !important;
-            transform: none !important;
           }
         }
       `}</style>
@@ -938,89 +959,101 @@ export default function Portfolio() {
 
       {/* NAVIGATION */}
 
-      <nav className="sticky top-0 z-50 border-b border-slate-800/80 bg-[#070B14]/90 backdrop-blur-2xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <a
-            href="#top"
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-400 bg-clip-text text-xl font-black tracking-wider text-transparent sm:text-2xl"
-          >
-            M. SHAYAN
-            <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
-          </a>
+      
+<nav className="sticky top-0 z-50 border-b border-slate-800/80 bg-[#070B14]/90 backdrop-blur-2xl">
+  <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <a
+      href="#top"
+      className="flex items-center gap-2 bg-gradient-to-r from-blue-400 via-cyan-400 to-indigo-400 bg-clip-text text-xl font-black tracking-wider text-transparent sm:text-2xl"
+    >
+      M. SHAYAN
+      <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+    </a>
 
-          <div className="hidden items-center gap-2 text-sm font-semibold md:flex">
-            {NAV.map(([id, label]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                aria-current={
-                  active === id ? "location" : undefined
-                }
-                className={`rounded-full px-4 py-2 transition-colors ${
-                  active === id
-                    ? "bg-blue-500/10 text-blue-400"
-                    : "text-slate-300 hover:text-blue-400"
-                }`}
-              >
-                {label}
-              </a>
-            ))}
-
-            <a
-              href="#contact"
-              className="ml-3 rounded-xl bg-blue-600 px-5 py-2.5 text-white shadow-lg shadow-blue-600/30 transition-all hover:-translate-y-0.5 hover:bg-blue-500"
-            >
-              Let&apos;s Talk
-            </a>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMenu((current) => !current)}
-            className="rounded-lg p-2 text-2xl text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 md:hidden"
-            aria-label={
-              menu
-                ? "Close navigation menu"
-                : "Open navigation menu"
-            }
-            aria-expanded={menu}
-            aria-controls="mobile-navigation"
-          >
-            {menu ? "✕" : "☰"}
-          </button>
-        </div>
-
-        <div
-          id="mobile-navigation"
-          aria-hidden={!menu}
-          className={`overflow-hidden transition-all duration-300 md:hidden ${
-            menu ? "max-h-96 border-t border-slate-800" : "max-h-0"
+    <div className="hidden items-center gap-2 text-sm font-semibold md:flex">
+      {NAV.map(([id, label]) => (
+        <a
+          key={id}
+          href={`#${id}`}
+          aria-current={active === id ? "location" : undefined}
+          className={`rounded-full px-4 py-2 transition-colors ${
+            active === id
+              ? "bg-blue-500/10 text-blue-400"
+              : "text-slate-300 hover:text-blue-400"
           }`}
         >
-          <div className="space-y-4 bg-[#0A0F1D]/95 px-6 py-5">
-            {NAV.map(([id, label]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                tabIndex={menu ? 0 : -1}
-                onClick={() => setMenu(false)}
-                className="block font-medium text-slate-300 hover:text-blue-400"
-              >
-                {label}
-              </a>
-            ))}
+          {label}
+        </a>
+      ))}
 
-            <a
-              href="#contact"
-              tabIndex={menu ? 0 : -1}
-              onClick={() => setMenu(false)}
-              className="block rounded-xl bg-blue-600 py-3 text-center font-medium"
-            >
-              Let&apos;s Talk
-            </a>
-          </div>
-        </div>
-      </nav>
+      <a
+        href="/login"
+        className="rounded-xl border border-slate-700 px-4 py-2.5 text-slate-300 transition hover:border-cyan-400 hover:text-cyan-400"
+      >
+        Admin Login
+      </a>
+
+      <a
+        href="#contact"
+        className="ml-2 rounded-xl bg-blue-600 px-5 py-2.5 text-white shadow-lg shadow-blue-600/30 transition-all hover:-translate-y-0.5 hover:bg-blue-500"
+      >
+        Let&apos;s Talk
+      </a>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setMenu((current) => !current)}
+      className="rounded-lg p-2 text-2xl text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 md:hidden"
+      aria-label={menu ? "Close navigation menu" : "Open navigation menu"}
+      aria-expanded={menu}
+      aria-controls="mobile-navigation"
+    >
+      {menu ? "✕" : "☰"}
+    </button>
+  </div>
+
+  <div
+    id="mobile-navigation"
+    aria-hidden={!menu}
+    className={`overflow-hidden transition-all duration-300 md:hidden ${
+      menu ? "max-h-96 border-t border-slate-800" : "max-h-0"
+    }`}
+  >
+    <div className="space-y-4 bg-[#0A0F1D]/95 px-6 py-5">
+      {NAV.map(([id, label]) => (
+        <a
+          key={id}
+          href={`#${id}`}
+          tabIndex={menu ? 0 : -1}
+          onClick={() => setMenu(false)}
+          className="block font-medium text-slate-300 hover:text-blue-400"
+        >
+          {label}
+        </a>
+      ))}
+
+      <a
+        href="/login"
+        tabIndex={menu ? 0 : -1}
+        onClick={() => setMenu(false)}
+        className="block rounded-xl border border-cyan-700/50 py-3 text-center font-semibold text-cyan-400 transition hover:bg-cyan-950/40"
+      >
+        Admin Login
+      </a>
+
+      <a
+        href="#contact"
+        tabIndex={menu ? 0 : -1}
+        onClick={() => setMenu(false)}
+        className="block rounded-xl bg-blue-600 py-3 text-center font-medium text-white"
+      >
+        Let&apos;s Talk
+      </a>
+    </div>
+  </div>
+</nav>
+
 
       <main id="top">
         {/* HERO */}
@@ -1063,7 +1096,7 @@ export default function Portfolio() {
               </h1>
             </Reveal>
 
-            {/* Add your photograph at public/shayan.jpeg */}
+                        {/* PROFILE PHOTO */}
 
             <Reveal
               delay={150}
@@ -1079,14 +1112,10 @@ export default function Portfolio() {
                       onError={() => setImageError(true)}
                     />
                   ) : (
-                    <div
-                      className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-blue-950 text-center"
-                      aria-label="Profile photograph not added"
-                    >
+                    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-blue-950 text-center">
                       <span className="text-4xl font-black tracking-tight text-cyan-300">
                         MS
                       </span>
-
                       <span className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                         Add your photo
                       </span>
@@ -1094,25 +1123,14 @@ export default function Portfolio() {
                   )}
                 </div>
 
-                <span
-                  className="absolute bottom-2 right-1 h-5 w-5 rounded-full border-4 border-[#070B14] bg-cyan-400"
-                  aria-hidden="true"
-                />
+                <span className="absolute bottom-2 right-1 h-5 w-5 rounded-full border-4 border-[#070B14] bg-cyan-400" />
               </div>
             </Reveal>
 
             <Reveal delay={200}>
-              <p
-                className="min-h-10 text-xl font-bold text-slate-200 sm:text-3xl"
-                aria-label={`Current role: ${role}`}
-              >
+              <p className="min-h-10 text-xl font-bold text-slate-200 sm:text-3xl">
                 {role}
-                <span
-                  className="caret text-blue-400"
-                  aria-hidden="true"
-                >
-                  |
-                </span>
+                <span className="caret text-blue-400">|</span>
               </p>
             </Reveal>
 
@@ -1139,7 +1157,7 @@ export default function Portfolio() {
                 href="#projects"
                 className="group rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-4 font-bold shadow-xl shadow-blue-600/30 transition-all hover:-translate-y-1 hover:shadow-blue-500/50"
               >
-                Explore Concept Projects{" "}
+                Explore Projects{" "}
                 <span className="inline-block transition-transform group-hover:translate-x-1">
                   →
                 </span>
@@ -1153,33 +1171,28 @@ export default function Portfolio() {
               </a>
             </Reveal>
 
-            {/* Direct email and LinkedIn links */}
-
             <Reveal
               delay={450}
               className="flex flex-wrap items-center justify-center gap-3 pt-1"
             >
               <a
-                href={`mailto:${EMAIL}`}
+                href="mailto:shayan.zone97@gmail.com"
                 className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-[#0F172A]/80 px-5 py-3 text-sm font-semibold text-slate-200 transition-all hover:-translate-y-0.5 hover:border-cyan-500/60 hover:text-cyan-300"
-                aria-label={`Email Muhammad Shayan at ${EMAIL}`}
               >
-                <span aria-hidden="true">✉</span>
-                Email Me
+                ✉ Email Me
               </a>
 
               <a
-                href={LINKEDIN}
+                href="https://www.linkedin.com/in/muhammad-shayan-36939a377?utm_source=share_via&utm_content=profile&utm_medium=member_android"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-blue-800/60 bg-blue-950/40 px-5 py-3 text-sm font-semibold text-blue-300 transition-all hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-950/70"
-                aria-label="Visit Muhammad Shayan's LinkedIn profile"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-[#0F172A]/80 px-5 py-3 text-sm font-semibold text-slate-200 transition-all hover:-translate-y-0.5 hover:border-blue-500/60 hover:text-blue-300"
               >
-                <span aria-hidden="true">in</span>
-                Connect on LinkedIn
-                <span aria-hidden="true">↗</span>
+                in LinkedIn
               </a>
             </Reveal>
+
+            {/* STATS */}
 
             <div className="mx-auto grid max-w-4xl grid-cols-2 gap-4 pt-10 sm:gap-5 md:grid-cols-4 md:pt-16">
               {STATS.map((stat, index) => (
@@ -1198,13 +1211,12 @@ export default function Portfolio() {
             </div>
 
             <p className="pt-2 text-xs text-slate-500">
-              Editable portfolio placeholders — update these labels
-              and values to match your verified experience.
+              Portfolio highlights and learning areas.
             </p>
           </div>
         </section>
 
-        {/* AI TOOLS MARQUEE */}
+        {/* TOOLS MARQUEE */}
 
         <div className="overflow-hidden border-y border-slate-800/80 bg-[#0A0F1D] py-5 [mask-image:linear-gradient(90deg,transparent,black_12%,black_88%,transparent)]">
           <div className="marquee flex w-max gap-4">
@@ -1303,7 +1315,7 @@ export default function Portfolio() {
                           : "Play visual audio demo"
                       }
                       aria-pressed={playing}
-                      className="h-12 w-12 shrink-0 rounded-xl bg-blue-600 text-lg font-bold shadow-lg transition-all hover:scale-105 hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                      className="h-12 w-12 shrink-0 rounded-xl bg-blue-600 text-lg font-bold shadow-lg transition-all hover:scale-105 hover:bg-blue-500"
                     >
                       {playing ? "⏸" : "▶"}
                     </button>
@@ -1316,10 +1328,7 @@ export default function Portfolio() {
                         <span>Demo</span>
                       </div>
 
-                      <div
-                        className="flex h-8 items-end gap-1"
-                        aria-hidden="true"
-                      >
+                      <div className="flex h-8 items-end gap-1">
                         {[
                           40, 70, 30, 90, 60, 80, 50, 100, 40,
                           70, 30, 85, 65, 45, 95, 55, 75, 35,
@@ -1374,7 +1383,7 @@ export default function Portfolio() {
                       type="button"
                       onClick={() => setTab(key)}
                       aria-pressed={tab === key}
-                      className={`rounded-xl px-4 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:px-6 ${
+                      className={`rounded-xl px-4 py-3 text-sm font-bold transition-all ${
                         tab === key
                           ? "scale-105 bg-blue-600 text-white shadow-lg shadow-blue-600/30"
                           : "border border-slate-800 bg-[#070B14] text-slate-400 hover:text-slate-200"
@@ -1416,19 +1425,10 @@ export default function Portfolio() {
                       {out}
 
                       <span
-                        className="caret text-cyan-400"
+                        className="ml-1 inline-block h-4 w-1 animate-pulse bg-blue-400 align-middle"
                         aria-hidden="true"
-                      >
-                        ▍
-                      </span>
+                      />
                     </div>
-
-                    <p className="text-xs leading-relaxed text-slate-500">
-                      These are prewritten demonstrations, not live
-                      AI responses. Verify factual claims and consult
-                      reliable sources before using generated
-                      material in journalism or academic work.
-                    </p>
                   </div>
                 </div>
               </div>
@@ -1436,7 +1436,7 @@ export default function Portfolio() {
           </div>
         </section>
 
-        {/* SKILLS */}
+                {/* SKILLS */}
 
         <section
           id="skills"
@@ -1630,115 +1630,116 @@ export default function Portfolio() {
           </div>
         </section>
 
+
         {/* CONTACT */}
 
         <section
           id="contact"
-          className="relative scroll-mt-20 overflow-hidden border-t border-slate-800/80 py-24"
+          className="scroll-mt-20 border-t border-slate-800/80 py-24"
         >
-          <div className="orb pointer-events-none absolute -bottom-20 left-1/2 h-[300px] w-[600px] max-w-full -translate-x-1/2 rounded-full bg-blue-600/15 blur-[120px]" />
-
-          <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
             <Head
-              title="Let's Collaborate"
-              sub="Interested in media, AI-assisted content, digital storytelling or creative ideas? I'd love to connect and explore opportunities to learn and collaborate."
+              title="Let's Connect"
+              sub="Have a project idea, collaboration opportunity or simply want to talk about AI and media? Send me a message."
             />
 
-            <Reveal>
-              <div className="rounded-3xl border border-slate-800 bg-[#0F172A]/80 p-6 shadow-2xl backdrop-blur sm:p-12">
-                <div className="mb-8 text-center">
-                  <h3 className="text-2xl font-bold">
-                    Get in Touch
+            <div className="grid gap-10 lg:grid-cols-2">
+              <Reveal>
+                <div className="h-full rounded-3xl border border-slate-800 bg-[#0F172A]/70 p-7 sm:p-9">
+                  <span className="text-sm font-bold uppercase tracking-widest text-blue-400">
+                    Get in touch
+                  </span>
+
+                  <h3 className="mt-4 text-3xl font-bold leading-tight">
+                    Let's create something
+                    <span className="block bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                      meaningful together.
+                    </span>
                   </h3>
 
-                  <p className="mt-3 text-sm leading-relaxed text-slate-400">
-                    Choose your preferred way to connect with me.
+                  <p className="mt-5 leading-relaxed text-slate-400">
+                    I am interested in AI-powered applications, digital
+                    journalism, media research, creative storytelling and
+                    meaningful technology projects.
                   </p>
+
+                  <div className="mt-9 space-y-5">
+                    <a
+                      href={`mailto:${EMAIL}`}
+                      className="group flex items-center gap-4 rounded-2xl border border-slate-800 p-4 transition hover:border-blue-500/50 hover:bg-blue-950/20"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-950 text-xl">
+                        ✉️
+                      </span>
+
+                      <span className="min-w-0">
+                        <span className="block text-xs text-slate-500">
+                          Email
+                        </span>
+                        <span className="break-all text-sm font-semibold text-slate-200 transition group-hover:text-blue-400">
+                          {EMAIL}
+                        </span>
+                      </span>
+                    </a>
+
+                    <a
+                      href="https://github.com/MuhammadShayan97"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-4 rounded-2xl border border-slate-800 p-4 transition hover:border-blue-500/50 hover:bg-blue-950/20"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-xl">
+                        💻
+                      </span>
+
+                      <span>
+                        <span className="block text-xs text-slate-500">
+                          GitHub
+                        </span>
+                        <span className="text-sm font-semibold text-slate-200 transition group-hover:text-blue-400">
+                          Explore my projects
+                        </span>
+                      </span>
+                    </a>
+
+                    <a
+                      href={LINKEDIN}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-4 rounded-2xl border border-slate-800 p-4 transition hover:border-blue-500/50 hover:bg-blue-950/20"
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-950 text-xl">
+                        in
+                      </span>
+
+                      <span>
+                        <span className="block text-xs text-slate-500">
+                          LinkedIn
+                        </span>
+                        <span className="text-sm font-semibold text-slate-200 transition group-hover:text-blue-400">
+                          Connect professionally
+                        </span>
+                      </span>
+                    </a>
+                  </div>
                 </div>
+              </Reveal>
 
-                {/* Direct email link */}
-
-                <a
-                  href={`mailto:${EMAIL}`}
-                  className="group mb-4 flex flex-col items-center gap-3 rounded-2xl border border-slate-700/80 bg-[#070B14] p-5 text-center transition-all hover:border-cyan-500/60 sm:flex-row sm:text-left"
+              <Reveal delay={120}>
+                <form
+                  onSubmit={submit}
+                  className="rounded-3xl border border-slate-800 bg-[#0F172A]/70 p-7 sm:p-9"
                 >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cyan-700/40 bg-cyan-950/50 text-2xl">
-                    ✉️
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-slate-400">
-                      Email Me
-                    </span>
-
-                    <span className="mt-1 block break-all font-semibold text-slate-100 transition-colors group-hover:text-cyan-300">
-                      {EMAIL}
-                    </span>
-                  </span>
-
-                  <span
-                    className="text-xl text-cyan-400"
-                    aria-hidden="true"
-                  >
-                    ↗
-                  </span>
-                </a>
-
-                {/* Direct LinkedIn link */}
-
-                <a
-                  href={LINKEDIN}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group mb-8 flex flex-col items-center gap-3 rounded-2xl border border-slate-700/80 bg-[#070B14] p-5 text-center transition-all hover:border-blue-500/60 sm:flex-row sm:text-left"
-                >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-blue-700/40 bg-blue-950/50 text-xl font-black text-blue-300">
-                    in
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-slate-400">
-                      LinkedIn Profile
-                    </span>
-
-                    <span className="mt-1 block font-semibold text-slate-100 transition-colors group-hover:text-blue-300">
-                      Connect with Muhammad Shayan
-                    </span>
-                  </span>
-
-                  <span
-                    className="text-xl text-blue-400"
-                    aria-hidden="true"
-                  >
-                    ↗
-                  </span>
-                </a>
-
-                <div className="mb-8 border-t border-slate-800 pt-8">
-                  <h3 className="mb-2 text-xl font-bold">
+                  <h3 className="mb-2 text-2xl font-bold">
                     Send a Message
                   </h3>
 
-                  <p className="text-sm leading-relaxed text-slate-400">
-                    This form is a front-end demonstration. It
-                    does not send messages until a form service or
-                    backend is connected.
+                  <p className="mb-7 text-sm text-slate-400">
+                    Fill in the details below and I will receive your message
+                    through the contact system.
                   </p>
-                </div>
 
-                {demoNotice && (
-                  <div
-                    role="status"
-                    className="mb-6 rounded-2xl border border-amber-700/40 bg-amber-950/30 p-4 text-sm text-amber-200"
-                  >
-                    This is a front-end demo. Your message has
-                    not been sent or stored. You can email me
-                    directly using the email link above.
-                  </div>
-                )}
-
-                <form onSubmit={submit} className="space-y-6">
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="space-y-5">
                     <div>
                       <label
                         htmlFor="contact-name"
@@ -1749,19 +1750,17 @@ export default function Portfolio() {
 
                       <input
                         id="contact-name"
-                        name="name"
-                        autoComplete="name"
                         type="text"
                         required
-                        value={form.name}
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            name: event.target.value,
-                          })
-                        }
-                        placeholder="Your name"
+                        minLength={2}
+                        maxLength={80}
+                        autoComplete="name"
+                        placeholder="Enter your name"
                         className={inputClass}
+                        value={form.name}
+                        onChange={(e) =>
+                          setForm({ ...form, name: e.target.value })
+                        }
                       />
                     </div>
 
@@ -1770,133 +1769,111 @@ export default function Portfolio() {
                         htmlFor="contact-email"
                         className="mb-2 block text-sm font-semibold text-slate-300"
                       >
-                        Your Email
+                        Email Address
                       </label>
 
                       <input
                         id="contact-email"
-                        name="email"
-                        autoComplete="email"
                         type="email"
                         required
-                        value={form.email}
-                        onChange={(event) =>
-                          setForm({
-                            ...form,
-                            email: event.target.value,
-                          })
-                        }
+                        maxLength={254}
+                        autoComplete="email"
                         placeholder="you@example.com"
                         className={inputClass}
+                        value={form.email}
+                        onChange={(e) =>
+                          setForm({ ...form, email: e.target.value })
+                        }
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label
-                      htmlFor="contact-message"
-                      className="mb-2 block text-sm font-semibold text-slate-300"
+                    <div>
+                      <label
+                        htmlFor="contact-message"
+                        className="mb-2 block text-sm font-semibold text-slate-300"
+                      >
+                        Your Message
+                      </label>
+
+                      <textarea
+                        id="contact-message"
+                        required
+                        minLength={10}
+                        maxLength={3000}
+                        rows={5}
+                        placeholder="Write your message here..."
+                        className={`${inputClass} resize-y`}
+                        value={form.message}
+                        onChange={(e) =>
+                          setForm({ ...form, message: e.target.value })
+                        }
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={sending}
+                      className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-4 font-bold text-white shadow-lg shadow-blue-950/40 transition duration-300 hover:-translate-y-1 hover:shadow-blue-900/50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Message
-                    </label>
+                      {sending ? "Sending Message..." : "Send Message"}
 
-                    <textarea
-                      id="contact-message"
-                      name="message"
-                      required
-                      minLength={10}
-                      rows={5}
-                      value={form.message}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          message: event.target.value,
-                        })
-                      }
-                      placeholder="Tell me about your project or idea..."
-                      className={inputClass}
-                    />
+                      {!sending && (
+                        <span className="transition-transform group-hover:translate-x-1">
+                          →
+                        </span>
+                      )}
+                    </button>
+
+                    {contactStatus === "success" && (
+                      <p
+                        role="status"
+                        className="rounded-xl border border-emerald-800 bg-emerald-950/30 p-4 text-sm text-emerald-300"
+                      >
+                        Your message has been submitted successfully!
+                      </p>
+                    )}
+
+                    {contactStatus && contactStatus !== "success" && (
+                      <p
+                        role="alert"
+                        className="rounded-xl border border-red-800 bg-red-950/30 p-4 text-sm text-red-300"
+                      >
+                        {contactStatus}
+                      </p>
+                    )}
                   </div>
-
-                  <button
-                    type="submit"
-                    className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-5 text-lg font-bold shadow-xl shadow-blue-600/30 transition-all hover:-translate-y-0.5 hover:shadow-blue-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-                  >
-                    Preview Demo Form
-                  </button>
                 </form>
-
-                <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-800 pt-8 text-sm text-slate-400 sm:flex-row">
-                  <a
-                    href={`mailto:${EMAIL}`}
-                    className="transition-colors hover:text-cyan-300"
-                  >
-                    📧 Contact me by email
-                  </a>
-
-                  <a
-                    href={LINKEDIN}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-blue-400 transition-colors hover:text-blue-300 hover:underline"
-                  >
-                    🔗 Find me on LinkedIn ↗
-                  </a>
-                </div>
-              </div>
-            </Reveal>
+              </Reveal>
+            </div>
           </div>
         </section>
+
       </main>
 
       {/* FOOTER */}
 
-      <footer className="space-y-5 border-t border-slate-800 bg-[#070B14] px-4 py-10 text-center text-sm text-slate-500">
-        <p>
-          © {new Date().getFullYear()} Muhammad Shayan.
-          Media Studies & AI exploration.
-        </p>
-
-        <p>
-          Built with Next.js, React and Tailwind CSS.
-        </p>
-
-        <div className="flex flex-wrap items-center justify-center gap-5">
-          <a
-            href={`mailto:${EMAIL}`}
-            className="inline-flex items-center gap-2 font-semibold text-slate-300 transition-colors hover:text-cyan-300"
-          >
-            <span aria-hidden="true">✉</span>
-            Email
-          </a>
-
-          <a
-            href={LINKEDIN}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 font-semibold text-slate-300 transition-colors hover:text-blue-400"
-          >
-            <span aria-hidden="true">in</span>
-            LinkedIn ↗
-          </a>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-5">
+      <footer className="border-t border-slate-800 bg-[#080D18]">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 px-4 py-9 text-center sm:px-6 md:flex-row md:text-left lg:px-8">
           <a
             href="#top"
-            className="inline-block font-semibold text-blue-400 transition-colors hover:text-blue-300"
+            className="text-xl font-black tracking-tight text-white"
           >
-            ↑ Back to top
+            MS<span className="text-blue-400">.</span>
           </a>
 
+          <p className="text-sm text-slate-500">
+            © {new Date().getFullYear()} Muhammad Shayan. All rights reserved.
+          </p>
+
           <a
-            href="/login"
-            className="inline-block font-semibold text-cyan-400 transition-colors hover:text-cyan-300"
+            href="#top"
+            className="text-sm font-semibold text-blue-400 transition hover:text-cyan-300"
           >
-            Admin Login →
+            Back to top ↑
           </a>
         </div>
       </footer>
+
     </div>
   );
 }

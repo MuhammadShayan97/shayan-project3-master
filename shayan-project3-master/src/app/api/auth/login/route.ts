@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { sql } from "../../../lib/db";
 import { setAdminSession } from "../../../lib/session";
+import { verifyAdminPassword } from "../../../lib/admin-password";
 
 export const runtime = "nodejs";
 
 const MAX_ATTEMPTS = 5;
-const WINDOW_MINUTES = 15;
 
 function safeCompare(a: string, b: string): boolean {
   const first = Buffer.from(a, "utf8");
@@ -40,11 +40,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const adminUsername = process.env.ADMIN_USERNAME;
-    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminUsername = process.env.ADMIN_USERNAME?.trim();
+    const fallbackPassword = process.env.ADMIN_PASSWORD;
 
-    if (!adminUsername || !adminPassword) {
-      console.error("Admin credentials are not configured.");
+    if (!adminUsername) {
+      console.error("Admin username is not configured.");
 
       return NextResponse.json(
         {
@@ -81,19 +81,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify credentials.
-    const usernameMatches = safeCompare(
-      username,
-      adminUsername.trim()
-    );
+    // Check whether a changed password is stored in the database.
+    const credentialRows = await sql`
+      SELECT password_hash
+      FROM admin_credentials
+      WHERE username = ${adminUsername}
+      LIMIT 1
+    `;
 
-    const passwordMatches = safeCompare(
-      password,
-      adminPassword
-    );
+    const usernameMatches = safeCompare(username, adminUsername);
+
+    let passwordMatches = false;
+
+    if (credentialRows.length > 0) {
+      passwordMatches = verifyAdminPassword(
+        password,
+        String(credentialRows[0].password_hash)
+      );
+    } else if (fallbackPassword) {
+      // Use the original environment password until a new one is saved.
+      passwordMatches = safeCompare(password, fallbackPassword);
+    }
 
     if (!usernameMatches || !passwordMatches) {
-      // Atomically record a failed login attempt.
+      // Record a failed login attempt.
       const result = await sql`
         INSERT INTO admin_login_rate_limits (
           username,
@@ -176,7 +187,6 @@ export async function POST(request: NextRequest) {
     await setAdminSession(response);
 
     return response;
-
   } catch (error) {
     console.error("Login API error:", error);
 
